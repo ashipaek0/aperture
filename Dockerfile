@@ -5,7 +5,7 @@ FROM oven/bun:latest AS deps
 
 WORKDIR /app
 
-COPY package.json bun.lockb* ./
+COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile 2>/dev/null || bun install
 
 # -----------------------------
