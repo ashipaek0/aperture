@@ -343,11 +343,11 @@ export function LoginForm({ onSuccess, onBack, serverHealth }: LoginFormProps) {
               )}
               <span>
                 {serverHealth.status === "checking" &&
-                  `Connecting to ${serverHealth.url}...`}
+                  "Connecting to server..."}
                 {serverHealth.status === "connected" &&
-                  `Connected to ${serverHealth.url}`}
+                  "Connected to server"}
                 {serverHealth.status === "error" &&
-                  `Could not connect to ${serverHealth.url}. You can still sign in, or go back to enter a different server.`}
+                  "Could not connect to server. You can still sign in, or go back to enter a different server."}
               </span>
             </div>
           )}

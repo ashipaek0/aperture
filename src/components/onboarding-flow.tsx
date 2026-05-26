@@ -9,7 +9,7 @@ import axios from "axios";
 type OnboardingStep = "server" | "login";
 
 export function OnboardingFlow() {
-  const [currentStep, setCurrentStep] = useState<OnboardingStep>("server");
+  const [currentStep, setCurrentStep] = useState<OnboardingStep | null>(null);
   const [serverHealth, setServerHealth] = useState<ServerHealthStatus | null>(null);
   const router = useRouter();
 
@@ -75,6 +75,10 @@ export function OnboardingFlow() {
     setCurrentStep("server");
   };
 
+  if (currentStep === null) {
+    return null;
+  }
+
   if (currentStep === "server") {
     return <ServerSetup onNext={handleServerSetup} />;
   }
@@ -89,5 +93,5 @@ export function OnboardingFlow() {
     );
   }
 
-  return <ServerSetup onNext={handleServerSetup} />;
+  return null;
 }
