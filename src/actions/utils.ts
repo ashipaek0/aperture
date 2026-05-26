@@ -129,7 +129,42 @@ export async function getImageUrl(
     params.set("tag", tag);
   }
 
-  return `${serverUrl}/Items/${itemId}/Images/${imageType}?${params.toString()}`;
+  return sanitizeImageUrl(
+    `${serverUrl}/Items/${itemId}/Images/${imageType}?${params.toString()}`,
+  );
+}
+
+export function sanitizeImageUrl(url: string): string {
+  // Downgrade HTTPS to HTTP for local/private IPs and hostnames
+  // that don't support SSL (common with self-hosted Jellyfin plugins)
+  if (url.startsWith("https://")) {
+    try {
+      const u = new URL(url);
+      const host = u.hostname;
+      // Localhost
+      if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
+        return url.replace("https://", "http://");
+      }
+      // Private IP ranges
+      const ipParts = host.split(".").map(Number);
+      if (ipParts.length === 4 && ipParts.every((p) => !isNaN(p) && p >= 0 && p <= 255)) {
+        if (
+          ipParts[0] === 10 ||
+          (ipParts[0] === 172 && ipParts[1] >= 16 && ipParts[1] <= 31) ||
+          (ipParts[0] === 192 && ipParts[1] === 168)
+        ) {
+          return url.replace("https://", "http://");
+        }
+      }
+    } catch {
+      // Invalid URL, return as-is
+    }
+  }
+  return url;
+}
+
+export function getProxiedImageUrl(originalUrl: string): string {
+  return `/api/images/proxy?url=${encodeURIComponent(sanitizeImageUrl(originalUrl))}`;
 }
 
 export async function getLiveTVStreamUrl(
@@ -395,7 +430,7 @@ export async function getSubtitleTracks(
           (stream.Codec || "").toLowerCase() !== "pgssub",
       ) || [];
     const subtitleTracks = subtitleStreams.map((stream) => {
-      const src = `${serverUrl}/Videos/${itemId}/${mediaSourceId}/Subtitles/${stream.Index}/Stream.vtt?api_key=${user.AccessToken}`;
+      const src = `/api/subtitles/Videos/${itemId}/${mediaSourceId}/Subtitles/${stream.Index}/Stream.vtt`;
       return {
         kind: "subtitles",
         label:

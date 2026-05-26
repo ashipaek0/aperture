@@ -7,6 +7,7 @@ import { usePlayback } from "../hooks/usePlayback";
 import { decode } from "blurhash";
 import { OptimizedImage } from "./optimized-image";
 import Link from "next/link";
+import { sanitizeImageUrl } from "../actions/utils";
 
 export function LiveChannelCard({
   item,
@@ -29,7 +30,9 @@ export function LiveChannelCard({
 
   // Adjust image URL parameters based on container type
   const imageUrl = item.ImageTags?.["Primary"]
-    ? `${serverUrl}/Items/${imageItemId}/Images/Primary?maxHeight=256&maxWidth=256&quality=100`
+    ? sanitizeImageUrl(
+        `${serverUrl}/Items/${imageItemId}/Images/Primary?maxHeight=256&maxWidth=256&quality=100`,
+      )
     : null;
 
   // Get blur hash

@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { decode } from "blurhash";
 import { OptimizedImage } from "../optimized-image";
 import { useRouter } from "next/navigation";
+import { sanitizeImageUrl } from "../../actions/utils";
 
 interface HeroSlideProps {
   item: BaseItemDto;
@@ -33,11 +34,11 @@ export function HeroSlide({ item, serverUrl }: HeroSlideProps) {
         ? item.ParentBackdropItemId || item.SeriesId || item.Id
         : item.Id;
     const backdropUrl = backdropItemId
-      ? `${serverUrl}/Items/${backdropItemId}/Images/Backdrop/0?maxWidth=3840&quality=90`
+      ? sanitizeImageUrl(`${serverUrl}/Items/${backdropItemId}/Images/Backdrop/0?maxWidth=3840&quality=90`)
       : null;
     return (
       backdropUrl ||
-      `${serverUrl}/Items/${item.Id}/Images/Primary?maxWidth=3840&quality=90`
+      sanitizeImageUrl(`${serverUrl}/Items/${item.Id}/Images/Primary?maxWidth=3840&quality=90`)
     );
   }, [item]);
 
@@ -45,7 +46,7 @@ export function HeroSlide({ item, serverUrl }: HeroSlideProps) {
   const logoItemId = item.ImageTags?.Logo ? item.Id : item.ParentLogoItemId;
   const logoUrl =
     logoTag && logoItemId
-      ? `${serverUrl}/Items/${logoItemId}/Images/Logo?maxWidth=500&quality=90&tag=${logoTag}`
+      ? sanitizeImageUrl(`${serverUrl}/Items/${logoItemId}/Images/Logo?maxWidth=500&quality=90&tag=${logoTag}`)
       : null;
 
   const blurHash =

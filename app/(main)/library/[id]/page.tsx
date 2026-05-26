@@ -12,7 +12,7 @@ import { useParams } from "next/navigation";
 import ErrorWindow from "@/src/components/error-window";
 import { useAuthError } from "@/src/hooks/use-auth-error";
 
-const PAGE_SIZE = 300;
+const PAGE_SIZE = 100;
 
 export default function LibraryPage() {
   const { id } = useParams<{ id: string }>();

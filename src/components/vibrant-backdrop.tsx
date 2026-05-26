@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { Vibrant } from "node-vibrant/browser";
 import { OptimizedImage } from "./optimized-image";
+import { getProxiedImageUrl } from "../actions/utils";
 
 interface VibrantBackdropProps {
   src: string;
@@ -20,27 +21,29 @@ export function VibrantBackdrop({
 }: VibrantBackdropProps) {
   const [shadowColor, setShadowColor] = useState<string>("");
 
-  useEffect(() => {
-    const extractColors = async () => {
-      try {
-        const vibrant = new Vibrant(src);
-        const palette = await vibrant.getPalette();
+  const extractColors = async () => {
+    try {
+      const proxiedSrc = getProxiedImageUrl(src);
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = proxiedSrc;
+      await img.decode();
 
-        // Get the most vibrant color available
-        const vibrantColor =
-          palette.Vibrant?.hex ||
-          palette.LightVibrant?.hex ||
-          palette.DarkVibrant?.hex ||
-          palette.Muted?.hex;
-
-        if (vibrantColor) {
-          setShadowColor(vibrantColor);
-        }
-      } catch (error) {
-        console.error("Error extracting colors from backdrop:", error);
+      const palette = await Vibrant.from(img).getPalette();
+      const vibrantColor =
+        palette.Vibrant?.hex ||
+        palette.LightVibrant?.hex ||
+        palette.DarkVibrant?.hex ||
+        palette.Muted?.hex;
+      if (vibrantColor) {
+        setShadowColor(vibrantColor);
       }
-    };
+    } catch {
+      // Backdrop may not load — use no shadow
+    }
+  };
 
+  useEffect(() => {
     if (src) {
       extractColors();
     }
@@ -61,25 +64,9 @@ export function VibrantBackdrop({
       width={width}
       height={height}
       style={dynamicStyle}
+      crossOrigin="anonymous"
       onLoad={() => {
-        // Re-extract colors when image loads to ensure accuracy
         if (!shadowColor) {
-          const extractColors = async () => {
-            try {
-              const vibrant = new Vibrant(src);
-              const palette = await vibrant.getPalette();
-              const vibrantColor =
-                palette.Vibrant?.hex ||
-                palette.LightVibrant?.hex ||
-                palette.DarkVibrant?.hex ||
-                palette.Muted?.hex;
-              if (vibrantColor) {
-                setShadowColor(vibrantColor);
-              }
-            } catch (error) {
-              console.error("Error extracting colors from backdrop:", error);
-            }
-          };
           extractColors();
         }
       }}

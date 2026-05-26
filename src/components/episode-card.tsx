@@ -5,6 +5,7 @@ import { Play } from "lucide-react";
 import { usePlayback } from "../hooks/usePlayback";
 import { OptimizedImage } from "./optimized-image";
 import Link from "next/link";
+import { sanitizeImageUrl } from "../actions/utils";
 
 export function EpisodeCard({
   item,
@@ -25,7 +26,9 @@ export function EpisodeCard({
 
   // Use thumbnail image for episodes (16:9 aspect ratio)
   const imageItemId = item.ParentThumbItemId || item.Id;
-  const imageUrl = `${serverUrl}/Items/${imageItemId}/Images/Thumb?fillHeight=270&fillWidth=480&quality=50`;
+  const imageUrl = sanitizeImageUrl(
+    `${serverUrl}/Items/${imageItemId}/Images/Thumb?fillHeight=270&fillWidth=480&quality=50`,
+  );
 
   // Calculate progress percentage from resume position
   let progressPercentage = percentageWatched;

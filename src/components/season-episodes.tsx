@@ -18,6 +18,7 @@ import { OptimizedImage } from "./optimized-image";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { sanitizeImageUrl } from "../actions/utils";
 
 interface SeasonEpisodesProps {
   showId: string;
@@ -380,7 +381,9 @@ const EpisodeCard = React.memo(function EpisodeCard({
   serverUrl: string;
   currentEpisodeId: string | null;
 }) {
-  const imageUrl = `${serverUrl}/Items/${episode.Id}/Images/Primary?width=576&height=324&quality=95`;
+  const imageUrl = sanitizeImageUrl(
+    `${serverUrl}/Items/${episode.Id}/Images/Primary?width=576&height=324&quality=95`,
+  );
   const isCurrentEpisode = currentEpisodeId === episode.Id;
 
   // Memoize the date formatting function

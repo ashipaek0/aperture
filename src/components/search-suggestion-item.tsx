@@ -5,6 +5,7 @@ import { Badge } from "./ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
 import { useAuth } from "../hooks/useAuth";
 import { decode } from "blurhash";
+import { sanitizeImageUrl } from "../actions/utils";
 
 interface Item {
   Id: string;
@@ -45,7 +46,7 @@ export function SearchSuggestionItem({
     ? item.ImageTags?.Primary
       ? `https://image.tmdb.org/t/p/w200${item.ImageTags.Primary}`
       : undefined
-    : `${serverUrl}/Items/${item.Id}/Images/Primary`;
+    : sanitizeImageUrl(`${serverUrl}/Items/${item.Id}/Images/Primary`);
 
   // Get blur hash
   const imageTag = item.ImageTags?.Primary;

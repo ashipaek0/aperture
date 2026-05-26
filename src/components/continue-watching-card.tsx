@@ -2,6 +2,7 @@
 import React from "react";
 import { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
 import { usePlayback } from "../hooks/usePlayback";
+import { sanitizeImageUrl } from "../actions/utils";
 
 interface ContinueWatchingCardProps {
   item: BaseItemDto;
@@ -23,7 +24,7 @@ export function ContinueWatchingCard({
 
   // Use backdrop/thumb image for landscape view
   const imageType = "Primary";
-  const imageUrl = `${serverUrl}/Items/${item.Id}/Images/${imageType}`;
+  const imageUrl = sanitizeImageUrl(`${serverUrl}/Items/${item.Id}/Images/${imageType}`);
 
   const handlePlayResume = async () => {
     if (item) {

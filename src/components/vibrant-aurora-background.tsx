@@ -5,6 +5,7 @@ import { Vibrant } from "node-vibrant/browser";
 import { AuroraBackground } from "@/src/components/aurora-background";
 import { auroraColorsAtom, updateAuroraColorsAtom } from "@/src/lib/atoms";
 import { useSettings } from "../contexts/settings-context";
+import { getProxiedImageUrl } from "../actions/utils";
 
 interface VibrantAuroraBackgroundProps {
   posterUrl?: string;
@@ -27,7 +28,13 @@ export function VibrantAuroraBackground({
     async (url: string) => {
       if (!enableAuroraEffect) return;
       try {
-        const palette = await Vibrant.from(url).getPalette();
+        const proxiedSrc = getProxiedImageUrl(url);
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.src = proxiedSrc;
+        await img.decode();
+
+        const palette = await Vibrant.from(img).getPalette();
 
         // Extract vibrant colors from the palette
         const vibrantColors: string[] = [];
@@ -70,9 +77,8 @@ export function VibrantAuroraBackground({
           }
           updateColors(finalColors);
         }
-      } catch (error) {
-        console.warn("Failed to extract colors from poster:", error);
-        // Keep previous colors on error - they're already in the atom
+      } catch {
+        // Poster image may not exist — keep previous colors
       }
     },
     [posterUrl, updateColors, enableAuroraEffect],

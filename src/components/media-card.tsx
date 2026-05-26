@@ -6,6 +6,7 @@ import { decode } from "blurhash";
 import { usePlayback } from "../hooks/usePlayback";
 import { OptimizedImage } from "./optimized-image";
 import Link from "next/link";
+import { sanitizeImageUrl } from "../actions/utils";
 
 type MediaCardProps = {
   item: BaseItemDto;
@@ -84,7 +85,9 @@ export const MediaCard = React.memo(function MediaCard({
     const sizeParams = continueWatching
       ? "maxHeight=324&maxWidth=576"
       : "maxHeight=432&maxWidth=288";
-    return `${serverUrl}/Items/${imageItemId}/Images/${imageType}?${sizeParams}&quality=100`;
+    return sanitizeImageUrl(
+      `${serverUrl}/Items/${imageItemId}/Images/${imageType}?${sizeParams}&quality=100`,
+    );
   }, [continueWatching, imageItemId, imageType, serverUrl, item]);
 
   const imageTag =

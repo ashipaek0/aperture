@@ -3,6 +3,7 @@ import { User } from "lucide-react";
 import { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models/base-item-dto";
 import { useMemo } from "react";
 import Link from "next/link";
+import { sanitizeImageUrl } from "../actions/utils";
 
 interface PersonCardProps {
   person: BaseItemDto;
@@ -11,7 +12,7 @@ interface PersonCardProps {
 
 export function PersonCard({ person, serverUrl }: PersonCardProps) {
   const imageUrl = person.Id
-    ? `${serverUrl}/Items/${person.Id}/Images/Primary`
+    ? sanitizeImageUrl(`${serverUrl}/Items/${person.Id}/Images/Primary`)
     : null;
 
   // Get initials for fallback

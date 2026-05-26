@@ -1,6 +1,7 @@
 "use client";
 import { SyntheticEvent, useEffect, useMemo, useState } from "react";
 import { Vibrant } from "node-vibrant/browser";
+import { getProxiedImageUrl } from "../actions/utils";
 
 interface VibrantLogoProps {
   src: string;
@@ -23,17 +24,19 @@ export function VibrantLogo({
   useEffect(() => {
     const extractColors = async () => {
       try {
-        const vibrant = new Vibrant(src);
-        const palette = await vibrant.getPalette();
+        const proxiedSrc = getProxiedImageUrl(src);
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.src = proxiedSrc;
+        await img.decode();
 
-        // Get the LightVibrant color, fallback to Vibrant if not available
+        const palette = await Vibrant.from(img).getPalette();
         const lightVibrant = palette.LightVibrant?.hex || palette.Vibrant?.hex;
-
         if (lightVibrant) {
           setShadowColor(lightVibrant);
         }
-      } catch (error) {
-        console.error("Error extracting colors from logo:", error);
+      } catch {
+        // Logo image may not exist or CORS may block — use no shadow
       }
     };
 
@@ -42,11 +45,9 @@ export function VibrantLogo({
     }
   }, [src]);
 
-  // memoized style object to prevent unnecessary re-renders
   const dynamicStyle = useMemo(() => {
     if (!shadowColor) return {};
 
-    // Detect if the browser is Safari to avoid the drop-shadow "boxed" clipping effect
     const isSafari =
       typeof navigator !== "undefined" &&
       /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
@@ -71,21 +72,26 @@ export function VibrantLogo({
       width={width}
       height={height}
       style={dynamicStyle}
+      crossOrigin="anonymous"
       onError={handleImageLoadError}
       onLoad={() => {
-        // Re-extract colors when image loads to ensure accuracy
         if (!shadowColor) {
           const extractColors = async () => {
             try {
-              const vibrant = new Vibrant(src);
-              const palette = await vibrant.getPalette();
+              const proxiedSrc = getProxiedImageUrl(src);
+              const img = new Image();
+              img.crossOrigin = "anonymous";
+              img.src = proxiedSrc;
+              await img.decode();
+
+              const palette = await Vibrant.from(img).getPalette();
               const lightVibrant =
                 palette.LightVibrant?.hex || palette.Vibrant?.hex;
               if (lightVibrant) {
                 setShadowColor(lightVibrant);
               }
-            } catch (error) {
-              console.error("Error extracting colors from logo:", error);
+            } catch {
+              // Silent fallback
             }
           };
           extractColors();

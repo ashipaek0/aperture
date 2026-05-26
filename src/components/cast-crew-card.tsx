@@ -4,6 +4,7 @@ import { BaseItemPerson } from "@jellyfin/sdk/lib/generated-client/models";
 import { useMemo } from "react";
 import { OptimizedImage } from "./optimized-image";
 import Link from "next/link";
+import { sanitizeImageUrl } from "../actions/utils";
 
 // Utility function to format role names by adding spaces before capital letters
 function formatRole(role: string): string {
@@ -15,7 +16,9 @@ export function CastCrewCard({ person }: { person: BaseItemPerson }) {
 
   const imageUrl = useMemo(() => {
     if (person.PrimaryImageTag && serverUrl && person.Id) {
-      return `${serverUrl}/Items/${person.Id}/Images/Primary?maxWidth=250&maxHeight=250&quality=60&tag=${person.PrimaryImageTag}`;
+      return sanitizeImageUrl(
+        `${serverUrl}/Items/${person.Id}/Images/Primary?maxWidth=250&maxHeight=250&quality=60&tag=${person.PrimaryImageTag}`,
+      );
     }
     return undefined;
   }, [person, serverUrl]);
