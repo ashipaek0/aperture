@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 interface ScanLibraryButtonProps {
   libraryId?: string;
+  isAdmin?: boolean;
   variant?: "default" | "outline" | "secondary" | "ghost";
   size?: "default" | "sm" | "lg";
   className?: string;
@@ -15,10 +16,12 @@ interface ScanLibraryButtonProps {
 
 export function ScanLibraryButton({
   libraryId,
+  isAdmin = false,
   variant = "outline",
   size = "default",
   className,
 }: ScanLibraryButtonProps) {
+  if (!isAdmin) return null;
   const [isScanning, setIsScanning] = useState(false);
 
   const handleScan = async () => {

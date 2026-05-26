@@ -1,60 +1,77 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { isAuthenticated, getServerUrl } from "../actions";
+import { isAuthenticated, getServerUrl, checkServerHealth, setServerUrl } from "../actions";
 import { ServerSetup } from "../components/server-setup";
-import { LoginForm } from "../components/login-form";
-import { ThemePreferenceStep } from "./theme-preference-step";
-import { useAtom } from "jotai";
-import { themeSelectionAtom } from "../lib/atoms";
+import { LoginForm, ServerHealthStatus } from "../components/login-form";
 import { useRouter } from "next/navigation";
+import axios from "axios";
 
-type OnboardingStep = "server" | "login" | "theme";
+type OnboardingStep = "server" | "login";
 
 export function OnboardingFlow() {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>("server");
+  const [serverHealth, setServerHealth] = useState<ServerHealthStatus | null>(null);
   const router = useRouter();
-  const [selectedTheme] = useAtom(themeSelectionAtom);
-
-  console.log("OnboardingFlow rendered, currentStep:", currentStep);
 
   useEffect(() => {
-    const checkAuthStatus = async () => {
+    const init = async () => {
       const authenticated = await isAuthenticated();
-      const serverUrl = await getServerUrl();
+      const existingServerUrl = await getServerUrl();
 
-      console.log("Auth status:", { authenticated, serverUrl });
-
-      // Check if user is already authenticated
-      if (authenticated && serverUrl) {
+      if (authenticated && existingServerUrl) {
         router.push("/");
         return;
-      } else if (serverUrl && !authenticated) {
+      }
+
+      // Check if DEFAULT_SERVER_URL env var is set
+      try {
+        const { data } = await axios("/api/config");
+        const defaultUrl = data.defaultServerUrl as string;
+
+        if (defaultUrl) {
+          setServerHealth({ status: "checking", url: defaultUrl });
+
+          const result = await checkServerHealth(defaultUrl);
+          if (result.success && result.finalUrl) {
+            await setServerUrl(result.finalUrl);
+            setServerHealth({ status: "connected", url: result.finalUrl });
+          } else {
+            setServerHealth({
+              status: "error",
+              url: defaultUrl,
+              error: result.error,
+            });
+          }
+
+          setCurrentStep("login");
+          return;
+        }
+      } catch {
+        // Config endpoint unreachable — proceed with normal flow
+      }
+
+      // Normal flow: no default server URL
+      if (existingServerUrl && !authenticated) {
         setCurrentStep("login");
       } else {
         setCurrentStep("server");
       }
     };
 
-    checkAuthStatus();
+    init();
   }, [router]);
 
   const handleServerSetup = () => {
+    setServerHealth(null);
     setCurrentStep("login");
   };
 
   const handleLoginSuccess = () => {
-    if (selectedTheme.variant && selectedTheme.variant !== "Auto") {
-      router.push("/");
-    } else {
-      setCurrentStep("theme");
-    }
-  };
-
-  const handleThemeComplete = () => {
     router.push("/");
   };
 
   const handleBackToServer = () => {
+    setServerHealth(null);
     setCurrentStep("server");
   };
 
@@ -64,15 +81,10 @@ export function OnboardingFlow() {
 
   if (currentStep === "login") {
     return (
-      <LoginForm onSuccess={handleLoginSuccess} onBack={handleBackToServer} />
-    );
-  }
-
-  if (currentStep === "theme") {
-    return (
-      <ThemePreferenceStep
-        onComplete={handleThemeComplete}
-        onBack={() => setCurrentStep("login")}
+      <LoginForm
+        onSuccess={handleLoginSuccess}
+        onBack={handleBackToServer}
+        serverHealth={serverHealth}
       />
     );
   }

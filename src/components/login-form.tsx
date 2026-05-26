@@ -31,6 +31,7 @@ import {
   RefreshCcw,
   AlertCircle,
   ShieldCheck,
+  CheckCircle,
 } from "lucide-react";
 import {
   Tabs,
@@ -41,9 +42,16 @@ import {
 import { Checkbox } from "../components/ui/checkbox";
 import { StoreLoginPreferences } from "../actions/store/store-login-preferences";
 
+export interface ServerHealthStatus {
+  status: "checking" | "connected" | "error";
+  url: string;
+  error?: string;
+}
+
 interface LoginFormProps {
   onSuccess: () => void;
   onBack: () => void;
+  serverHealth?: ServerHealthStatus | null;
 }
 
 type AuthMethod = "password" | "quickconnect";
@@ -53,7 +61,7 @@ interface QuickConnectSession {
   secret: string;
 }
 
-export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
+export function LoginForm({ onSuccess, onBack, serverHealth }: LoginFormProps) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -314,6 +322,36 @@ export function LoginForm({ onSuccess, onBack }: LoginFormProps) {
         </CardHeader>
 
         <CardContent className="pt-2">
+          {serverHealth && (
+            <div
+              className={`mb-4 flex items-start gap-2 rounded-md border px-3 py-2 text-sm ${
+                serverHealth.status === "connected"
+                  ? "border-green-500/30 bg-green-500/10 text-green-600"
+                  : serverHealth.status === "error"
+                    ? "border-red-500/30 bg-red-500/10 text-red-600"
+                    : "border-border/60 bg-muted/20 text-muted-foreground"
+              }`}
+            >
+              {serverHealth.status === "checking" && (
+                <Loader2 className="mt-0.5 h-4 w-4 animate-spin shrink-0" />
+              )}
+              {serverHealth.status === "connected" && (
+                <CheckCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              )}
+              {serverHealth.status === "error" && (
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              )}
+              <span>
+                {serverHealth.status === "checking" &&
+                  `Connecting to ${serverHealth.url}...`}
+                {serverHealth.status === "connected" &&
+                  `Connected to ${serverHealth.url}`}
+                {serverHealth.status === "error" &&
+                  `Could not connect to ${serverHealth.url}. You can still sign in, or go back to enter a different server.`}
+              </span>
+            </div>
+          )}
+
           <Tabs
             value={authMethod}
             onValueChange={(value) => setAuthMethod(value as AuthMethod)}

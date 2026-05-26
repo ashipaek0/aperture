@@ -1,5 +1,5 @@
 "use client";
-import { fetchLibraryItems, getLibraryById } from "@/src/actions";
+import { fetchLibraryItems, getLibraryById, getUser, getUserWithPolicy } from "@/src/actions";
 import { getAuthData } from "@/src/actions/utils";
 import { LibraryMediaList } from "@/src/components/library-media-list";
 import { SearchBar } from "@/src/components/search-component";
@@ -22,7 +22,26 @@ export default function LibraryPage() {
   const [libraryName, setLibraryName] = useState<string>("Library");
   const [serverUrl, setServerUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const { handleAuthError } = useAuthError();
+
+  useEffect(() => {
+    async function fetchAdminStatus() {
+      try {
+        const currentUser = await getUser();
+        if (currentUser?.Id) {
+          const userWithPolicy = await getUserWithPolicy(currentUser.Id, "");
+          if (userWithPolicy?.Policy?.IsAdministrator) {
+            setIsAdmin(true);
+          }
+        }
+      } catch {
+        // Non-admin or fetch failed — leave isAdmin as false
+      }
+    }
+
+    fetchAdminStatus();
+  }, []);
 
   useEffect(() => {
     async function fetchLibraryData() {
@@ -89,7 +108,7 @@ export default function LibraryPage() {
             <h2 className="text-3xl font-semibold text-foreground font-poppins">
               {libraryName}
             </h2>
-            <ScanLibraryButton libraryId={id} />
+            <ScanLibraryButton libraryId={id} isAdmin={isAdmin} />
           </div>
           <span className="font-mono text-muted-foreground">
             {libraryItems.length} items
