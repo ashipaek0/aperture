@@ -405,14 +405,14 @@ export async function getSubtitleTracks(
     index: number;
   }>
 > {
-  const { serverUrl, user } = await getAuthData();
-  if (!user.AccessToken) throw new Error("No access token found");
-
-  const jellyfinInstance = createJellyfinInstance();
-  const api = jellyfinInstance.createApi(serverUrl);
-  api.accessToken = user.AccessToken;
-
   try {
+    const { serverUrl, user } = await getAuthData();
+    if (!user.AccessToken) throw new Error("No access token found");
+
+    const jellyfinInstance = createJellyfinInstance();
+    const api = jellyfinInstance.createApi(serverUrl);
+    api.accessToken = user.AccessToken;
+
     // First get the media item to find subtitle streams
     const userLibraryApi = new UserLibraryApi(api.configuration);
     const { data: item } = await userLibraryApi.getItem({
@@ -463,14 +463,14 @@ export async function getAudioTracks(
     default: boolean;
   }>
 > {
-  const { serverUrl, user } = await getAuthData();
-  if (!user.AccessToken) throw new Error("No access token found");
-
-  const jellyfinInstance = createJellyfinInstance();
-  const api = jellyfinInstance.createApi(serverUrl);
-  api.accessToken = user.AccessToken;
-
   try {
+    const { serverUrl, user } = await getAuthData();
+    if (!user.AccessToken) throw new Error("No access token found");
+
+    const jellyfinInstance = createJellyfinInstance();
+    const api = jellyfinInstance.createApi(serverUrl);
+    api.accessToken = user.AccessToken;
+
     const userLibraryApi = new UserLibraryApi(api.configuration);
     const { data: item } = await userLibraryApi.getItem({
       userId: user.Id,
@@ -481,7 +481,7 @@ export async function getAudioTracks(
       (ms) => ms.Id === mediaSourceId,
     );
 
-    // 🔊 Get all audio streams
+    // Get all audio streams
     const audioStreams =
       mediaSource?.MediaStreams?.filter((stream) => stream.Type === "Audio") ||
       [];
