@@ -6,73 +6,25 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
+  actions: read
 
 jobs:
-  prepare:
-    if: ${{ !contains(github.event.head_commit.message, '[skip release]') }}
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.bump.outputs.version }}
-      tag: ${{ steps.bump.outputs.tag }}
-      commit_sha: ${{ steps.commit.outputs.sha }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Configure git user
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Bump version
-        id: bump
-        run: |
-          VERSION=$(node scripts/bump-version.mjs)
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Commit and tag release
-        id: commit
-        env:
-          VERSION: ${{ steps.bump.outputs.version }}
-          TAG: ${{ steps.bump.outputs.tag }}
-        run: |
-          if [[ -z "$(git status --porcelain)" ]]; then
-            echo "No version changes detected; aborting release."
-            exit 1
-          fi
-
-          git add package.json
-          git commit -m "chore: release ${TAG} [skip release]"
-          git tag "${TAG}"
-          git push origin HEAD:${GITHUB_REF_NAME}
-          git push origin "${TAG}"
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
   docker-image:
-    if: ${{ needs.prepare.result == 'success' }}
-    needs: prepare
     runs-on: ubuntu-latest
-    env:
-      VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.prepare.outputs.commit_sha }}
-          fetch-depth: 0
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(node -e "console.log(require('./package.json').version)")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Build Docker image
         run: |
-          docker build -t aperture-web:${VERSION} .
+          docker build -t aperture-web:${{ steps.version.outputs.version }} .
 
       - name: Log in to Docker Hub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" |
@@ -80,127 +32,10 @@ jobs:
 
       - name: Tag and push docker images
         env:
-          VERSION: ${{ env.VERSION }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          # Tag for Docker Hub
           docker tag aperture-web:${VERSION} ${{ secrets.DOCKERHUB_USERNAME }}/aperture-web:${VERSION}
           docker tag aperture-web:${VERSION} ${{ secrets.DOCKERHUB_USERNAME }}/aperture-web:latest
 
-          # Push
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/aperture-web:${VERSION}
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/aperture-web:latest
-
-      - name: Save image artifact (optional - keep your current)
-        run: |
-          mkdir -p build
-          docker save aperture-web:${VERSION} | gzip > "build/aperture-web-${VERSION}.tar.gz"
-
-      - name: Upload Docker image artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: aperture-web-${{ env.VERSION }}.tar.gz
-          path: build/aperture-web-${{ env.VERSION }}.tar.gz
-          if-no-files-found: error
-
-  release:
-    if: ${{ needs.prepare.result == 'success' && needs.docker-image.result == 'success' }}
-    needs:
-      - prepare
-      - docker-image
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository for gh release
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.prepare.outputs.commit_sha }}
-          fetch-depth: 0
-          path: repo
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          pattern: "*"
-          merge-multiple: true
-
-      - name: List downloaded artifacts
-        run: |
-          set -euo pipefail
-          if [ -d artifacts ]; then
-            echo "Collected artifacts:"
-            ls -R artifacts
-          else
-            echo "No artifacts downloaded." && exit 1
-          fi
-
-      - name: Assemble release payload
-        shell: bash
-        env:
-          VERSION: ${{ needs.prepare.outputs.version }}
-        run: |
-          set -euo pipefail
-          mkdir -p release
-          found=false
-          while IFS= read -r -d '' file; do
-            base=$(basename "$file")
-            cp "$file" "release/$base"
-            found=true
-          done < <(find artifacts -type f -print0)
-
-          if [ "$found" = false ]; then
-            echo "No artifact files were found to include in the release."
-            exit 1
-          fi
-
-      - name: Publish GitHub release
-        working-directory: repo
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ needs.prepare.outputs.version }}
-          TAG: ${{ needs.prepare.outputs.tag }}
-        run: |
-          set -euo pipefail
-          mapfile -d '' files < <(find ../release -type f -print0)
-
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "Release directory is empty; aborting."
-            exit 1
-          fi
-
-          gh release create "$TAG" \
-            --title "Apertúre v${VERSION}" \
-            --generate-notes \
-            "${files[@]}"
-
-      - name: Notify Discord
-        working-directory: repo
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-          TAG: ${{ needs.prepare.outputs.tag }}
-        run: |
-          set -euo pipefail
-
-          # Fetch release info
-          # We need to wait a moment for the release to propagate or just retry? 
-          # Usually immediate read is fine.
-          RELEASE_JSON=$(gh release view "$TAG" --json name,url,body)
-
-          # Prepare Payload using jq
-          # Truncate body to 4096 chars to fit Discord limit
-          PAYLOAD=$(echo "$RELEASE_JSON" | jq -c --arg avatar "https://cdn.discordapp.com/avatars/487431320314576937/bd64361e4ba6313d561d54e78c9e7171.png" \
-            '{
-              username: "Release Changelog",
-              avatar_url: $avatar,
-              content: "||@everyone||",
-              embeds: [{
-                title: .name,
-                url: .url,
-                color: 2105893,
-                description: (.body | if length > 4090 then .[0:4090] + "..." else . end),
-                footer: { text: "Changelog" }
-              }]
-            }')
-
-          # Send Webhook
-          curl -s -H "Content-Type: application/json" -d "$PAYLOAD" "$WEBHOOK_URL"
