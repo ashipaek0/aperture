@@ -1,6 +1,7 @@
 "use client";
 import { useState, SyntheticEvent, ImgHTMLAttributes, useEffect } from "react";
 import { cn } from "../lib/utils";
+import { sanitizeImageUrl } from "../actions/utils";
 import _ from "lodash";
 
 interface OptimizedImageProps extends ImgHTMLAttributes<HTMLImageElement> {
@@ -41,7 +42,7 @@ export function OptimizedImage({
     if (fallbackSrc) {
       return (
         <img
-          src={fallbackSrc}
+          src={typeof fallbackSrc === "string" ? sanitizeImageUrl(fallbackSrc) : fallbackSrc}
           alt={alt}
           loading="lazy"
           className={cn(
@@ -70,7 +71,7 @@ export function OptimizedImage({
 
   return (
     <img
-      src={src}
+      src={typeof src === "string" ? sanitizeImageUrl(src) : src}
       alt={alt}
       loading="lazy"
       className={cn(
