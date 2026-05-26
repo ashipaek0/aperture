@@ -76,7 +76,7 @@ export default function Home() {
             const items =
               library.CollectionType === "livetv"
                 ? (await fetchLiveTVItems(true)).items
-                : (await fetchLibraryItems({ id: library.Id!, collectionType: library.CollectionType }, 12)).items;
+                : (await fetchLibraryItems({ id: library.Id!, collectionType: library.CollectionType!, limit: 12 })).items;
             return { library, items };
           }),
         );

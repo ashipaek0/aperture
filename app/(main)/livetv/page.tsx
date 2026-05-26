@@ -6,6 +6,7 @@ import { SearchBar } from "@/src/components/search-component";
 import {
   BaseItemDto,
   ItemSortBy,
+  SortOrder,
 } from "@jellyfin/sdk/lib/generated-client/models";
 import { AuroraBackground } from "@/src/components/aurora-background";
 import { useEffect, useState } from "react";
@@ -74,7 +75,15 @@ export default function LiveTVPage() {
         <LibraryMediaList
           mediaItems={libraryItems}
           serverUrl={serverUrl}
-          initialSortField={ItemSortBy.IsFavoriteOrLiked}
+          hasMore={false}
+          loadingMore={false}
+          onLoadMore={() => {}}
+          sortBy={ItemSortBy.IsFavoriteOrLiked}
+          sortOrder={SortOrder.Ascending}
+          onSortChange={() => {}}
+          searchQuery=""
+          onSearchChange={() => {}}
+          onRefresh={() => {}}
         />
       </div>
     </div>

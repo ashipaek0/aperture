@@ -491,11 +491,29 @@ export async function reportPlaybackStopped(
   }
 }
 
+export interface LibraryItemsParams {
+  id: string;
+  collectionType?: string;
+  limit?: number;
+  startIndex?: number;
+  sortBy?: ItemSortBy;
+  sortOrder?: SortOrder;
+  searchTerm?: string;
+}
+
 export async function fetchLibraryItems(
-  libraryDetails: { id: string; collectionType?: string | undefined },
-  limit: number = 50,
-  startIndex: number = 0,
+  params: LibraryItemsParams,
 ): Promise<{ items: JellyfinItem[]; totalRecordCount: number }> {
+  const {
+    id,
+    collectionType,
+    limit = 300,
+    startIndex = 0,
+    sortBy = ItemSortBy.PremiereDate,
+    sortOrder = SortOrder.Descending,
+    searchTerm = undefined,
+  } = params;
+
   try {
     const { serverUrl, user } = await getAuthData();
     if (!user.AccessToken) throw new Error("No access token found");
@@ -506,17 +524,18 @@ export async function fetchLibraryItems(
 
     const { data } = await getItemsApi(api).getItems({
       userId: user.Id,
-      parentId: libraryDetails.id,
+      parentId: id,
       includeItemTypes: [
         BaseItemKind.Movie,
         BaseItemKind.Series,
         BaseItemKind.BoxSet,
       ],
       recursive: true,
-      sortBy: [ItemSortBy.SortName],
-      sortOrder: [SortOrder.Ascending],
+      sortBy: [sortBy],
+      sortOrder: [sortOrder],
       limit,
       startIndex,
+      searchTerm: searchTerm || undefined,
       fields: [
         ItemFields.CanDelete,
         ItemFields.PrimaryImageAspectRatio,
@@ -527,7 +546,7 @@ export async function fetchLibraryItems(
 
     // need to filter out duplicates for boxSets
     let uniqueItems = data.Items || [];
-    if (libraryDetails.collectionType === "boxsets") {
+    if (collectionType === "boxsets") {
       const seenItemIds = new Set<string>();
       uniqueItems = (data.Items || []).filter((item) => {
         if (!item?.Id) return true;

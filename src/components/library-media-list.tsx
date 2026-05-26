@@ -1,9 +1,10 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { MediaCard } from "../components/media-card";
 import {
   BaseItemDto,
   ItemSortBy,
+  SortOrder,
 } from "@jellyfin/sdk/lib/generated-client/models";
 import {
   DropdownMenu,
@@ -31,23 +32,24 @@ import {
   ArrowDown,
   Dices,
   Heart,
+  Loader2,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { LiveChannelCard } from "./live-channel-card";
 
-type SortField = {
+type SortFieldDef = {
   value: string;
   label: string;
-  getSortValue: (item: BaseItemDto) => number | string | boolean;
-  isDate?: boolean;
 };
 
-type SortOrder = "asc" | "desc";
+type SortOrderDef = {
+  value: string;
+  label: string;
+};
 
-// Icon mapping for sort fields
 const getSortFieldIcon = (fieldValue: string) => {
-  const iconMap = {
+  const iconMap: Record<string, any> = {
     SortName: Type,
     Random: Dice6,
     CommunityRating: Star,
@@ -58,155 +60,113 @@ const getSortFieldIcon = (fieldValue: string) => {
     ProductionYear: Calendar,
     IsFavoriteOrLiked: Heart,
   };
-  return iconMap[fieldValue as keyof typeof iconMap] || Type;
+  return iconMap[fieldValue] || Type;
 };
 
-// Icon mapping for sort orders
-const getSortOrderIcon = (orderValue: SortOrder) => {
-  return orderValue === "asc" ? ArrowUp : ArrowDown;
-};
-
-const sortFields: SortField[] = [
-  {
-    value: "SortName",
-    label: "Name",
-    getSortValue: (item) => item.Name || "",
-  },
-  {
-    value: "Random",
-    label: "Random",
-    getSortValue: () => Math.random(),
-  },
-  {
-    value: "CommunityRating",
-    label: "Community Rating",
-    getSortValue: (item) => item.CommunityRating || 0,
-  },
-  {
-    value: "CriticRating",
-    label: "Critics Rating",
-    getSortValue: (item) => item.CriticRating || 0,
-  },
-  {
-    value: "DateCreated",
-    label: "Date Added",
-    getSortValue: (item) =>
-      item.DateCreated ? new Date(item.DateCreated).getTime() : 0,
-    isDate: true,
-  },
-  {
-    value: "PremiereDate",
-    label: "Release Date",
-    getSortValue: (item) =>
-      item.PremiereDate ? new Date(item.PremiereDate).getTime() : 0,
-    isDate: true,
-  },
-  {
-    value: "Runtime",
-    label: "Runtime",
-    getSortValue: (item) => item.RunTimeTicks || 0,
-  },
-  {
-    value: "ProductionYear",
-    label: "Year",
-    getSortValue: (item) => item.ProductionYear || 0,
-  },
-  {
-    value: ItemSortBy.IsFavoriteOrLiked,
-    label: "Favorites",
-    getSortValue: (item) => item?.UserData?.IsFavorite || false,
-  },
+const sortFields: SortFieldDef[] = [
+  { value: ItemSortBy.PremiereDate, label: "Release Date" },
+  { value: ItemSortBy.DateCreated, label: "Date Added" },
+  { value: ItemSortBy.SortName, label: "Name" },
+  { value: ItemSortBy.CommunityRating, label: "Community Rating" },
+  { value: ItemSortBy.CriticRating, label: "Critics Rating" },
+  { value: ItemSortBy.Runtime, label: "Runtime" },
+  { value: ItemSortBy.ProductionYear, label: "Year" },
+  { value: ItemSortBy.IsFavoriteOrLiked, label: "Favorites" },
+  { value: "Random", label: "Random" },
 ];
 
-const sortOrders = [
-  { value: "asc" as SortOrder, label: "Ascending" },
-  { value: "desc" as SortOrder, label: "Descending" },
+const sortOrdersDef: SortOrderDef[] = [
+  { value: SortOrder.Descending, label: "Descending" },
+  { value: SortOrder.Ascending, label: "Ascending" },
 ];
 
 interface LibraryMediaListProps {
   mediaItems: BaseItemDto[];
   serverUrl: string;
-  initialSortField?: ItemSortBy;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
+  sortBy: string;
+  sortOrder: string;
+  onSortChange: (sortBy: string, sortOrder: string) => void;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+  onRefresh: () => void;
 }
 
 export function LibraryMediaList({
   mediaItems,
   serverUrl,
-  initialSortField = ItemSortBy.SortName,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+  sortBy,
+  sortOrder,
+  onSortChange,
+  searchQuery,
+  onSearchChange,
+  onRefresh,
 }: LibraryMediaListProps) {
-  const [sortField, setSortField] = useState<string>(initialSortField);
-  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [randomSeed, setRandomSeed] = useState<number>(() => Math.random());
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Function to trigger a reroll for random sorting
-  const handleReroll = () => {
-    setRandomSeed(Math.random());
-  };
+  // Infinite scroll via Intersection Observer
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
 
-  const filteredAndSortedItems = useMemo(() => {
-    // First filter by search query
-    const filtered = mediaItems.filter((item) =>
-      (item.Name || "").toLowerCase().includes(searchQuery.toLowerCase()),
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          onLoadMore();
+        }
+      },
+      { rootMargin: "400px" },
     );
 
-    // Then sort the filtered results
-    const selectedField = sortFields.find((field) => field.value === sortField);
-    if (!selectedField) return filtered;
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, onLoadMore]);
 
-    return [...filtered].sort((a, b) => {
-      // Special case for random sorting
-      if (sortField === "Random") {
-        const idHashA = (a.Id || "")
-          .split("")
-          .reduce((acc, char) => acc + char.charCodeAt(0), 0);
-        const idHashB = (b.Id || "")
-          .split("")
-          .reduce((acc, char) => acc + char.charCodeAt(0), 0);
-        return Math.sin(randomSeed * idHashA) - Math.sin(randomSeed * idHashB);
-      }
+  const handleSearchInput = useCallback(
+    (value: string) => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        onSearchChange(value);
+      }, 300);
+    },
+    [onSearchChange],
+  );
 
-      const valueA = selectedField.getSortValue(a);
-      const valueB = selectedField.getSortValue(b);
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
-      let comparison = 0;
-      if (typeof valueA === "string" && typeof valueB === "string") {
-        comparison = valueA.localeCompare(valueB);
-      } else if (typeof valueA === "boolean" && typeof valueB === "boolean") {
-        comparison = valueA === valueB ? 0 : valueA ? -1 : 1;
-      } else {
-        comparison = (valueA as number) - (valueB as number);
-      }
-
-      return sortOrder === "desc" ? -comparison : comparison;
-    });
-  }, [mediaItems, sortField, sortOrder, searchQuery, randomSeed]);
-
-  const selectedFieldLabel =
-    sortFields.find((field) => field.value === sortField)?.label || "Name";
+  const selectedField = sortFields.find((f) => f.value === sortBy);
+  const selectedFieldLabel = selectedField?.label || "Release Date";
   const selectedOrderLabel =
-    sortOrders.find((order) => order.value === sortOrder)?.label || "Ascending";
-  const SelectedFieldIcon = getSortFieldIcon(sortField);
-  const SelectedOrderIcon = getSortOrderIcon(sortOrder);
+    sortOrdersDef.find((o) => o.value === sortOrder)?.label || "Descending";
+  const SelectedFieldIcon = getSortFieldIcon(sortBy);
+  const SelectedOrderIcon =
+    sortOrder === SortOrder.Ascending ? ArrowUp : ArrowDown;
 
   return (
     <div className="space-y-4">
       {/* Search and Sort Controls */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        {/* Search Input */}
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
             placeholder="Search media..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            defaultValue={searchQuery}
+            onChange={(e) => handleSearchInput(e.target.value)}
             className="pl-9"
           />
         </div>
 
-        {/* Sort Controls */}
         <div className="flex items-center gap-2">
-          {/* Sort Field Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
@@ -221,10 +181,8 @@ export function LibraryMediaList({
                 return (
                   <DropdownMenuItem
                     key={field.value}
-                    onClick={() => setSortField(field.value)}
-                    className={`gap-2 ${
-                      sortField === field.value ? "bg-accent" : ""
-                    }`}
+                    onClick={() => onSortChange(field.value, sortOrder)}
+                    className={`gap-2 ${sortBy === field.value ? "bg-accent" : ""}`}
                   >
                     <FieldIcon className="h-4 w-4" />
                     {field.label}
@@ -234,28 +192,33 @@ export function LibraryMediaList({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Sort Order Button - Hide for Random */}
-          {sortField !== "Random" && (
+          {sortBy !== "Random" && (
             <Button
               variant="outline"
               size="sm"
               className="gap-2"
-              onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+              onClick={() =>
+                onSortChange(
+                  sortBy,
+                  sortOrder === SortOrder.Ascending
+                    ? SortOrder.Descending
+                    : SortOrder.Ascending,
+                )
+              }
             >
               <SelectedOrderIcon className="h-4 w-4" />
               {selectedOrderLabel}
             </Button>
           )}
 
-          {/* Reroll Button - Show only for Random */}
-          {sortField === "Random" && (
+          {sortBy === "Random" && (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={handleReroll}
+                    onClick={onRefresh}
                     className="gap-2"
                   >
                     <Dices className="h-4 w-4" />
@@ -272,7 +235,7 @@ export function LibraryMediaList({
 
       {/* Media Grid */}
       <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-4 auto-rows-max">
-        {filteredAndSortedItems.map((item) =>
+        {mediaItems.map((item) =>
           item.Type !== "TvChannel" ? (
             <MediaCard
               key={item.Id}
@@ -286,8 +249,23 @@ export function LibraryMediaList({
         )}
       </div>
 
+      {/* Infinite scroll sentinel + loading indicator */}
+      <div ref={sentinelRef} className="flex justify-center py-8">
+        {loadingMore && (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span className="text-sm">Loading more...</span>
+          </div>
+        )}
+        {!hasMore && mediaItems.length > 0 && (
+          <span className="text-sm text-muted-foreground">
+            All {mediaItems.length} items loaded
+          </span>
+        )}
+      </div>
+
       {/* Empty State */}
-      {filteredAndSortedItems.length === 0 && (
+      {mediaItems.length === 0 && (
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <div className="text-muted-foreground text-lg mb-2">

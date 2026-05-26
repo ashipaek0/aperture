@@ -5,28 +5,102 @@ import { LibraryMediaList } from "@/src/components/library-media-list";
 import { SearchBar } from "@/src/components/search-component";
 import { ScanLibraryButton } from "@/src/components/scan-library-button";
 import { AuroraBackground } from "@/src/components/aurora-background";
-import { useEffect, useState } from "react";
-import { BaseItemDto } from "@jellyfin/sdk/lib/generated-client/models";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { BaseItemDto, ItemSortBy, SortOrder } from "@jellyfin/sdk/lib/generated-client/models";
 import LoadingSpinner from "@/src/components/loading-spinner";
 import { useParams } from "next/navigation";
 import ErrorWindow from "@/src/components/error-window";
 import { useAuthError } from "@/src/hooks/use-auth-error";
 
+const PAGE_SIZE = 300;
+
 export default function LibraryPage() {
   const { id } = useParams<{ id: string }>();
 
-  const [libraryDetails, setLibraryDetails] = useState<BaseItemDto | null>(
-    null,
-  );
-  const [libraryItems, setLibraryItems] = useState<BaseItemDto[]>([]);
   const [libraryName, setLibraryName] = useState<string>("Library");
   const [serverUrl, setServerUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const { handleAuthError } = useAuthError();
 
+  const [items, setItems] = useState<BaseItemDto[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [sortBy, setSortBy] = useState<string>(ItemSortBy.PremiereDate);
+  const [sortOrder, setSortOrder] = useState<string>(SortOrder.Descending);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const collectionTypeRef = useRef<string | undefined>(undefined);
+  const fetchingRef = useRef(false);
+
+  const fetchPage = useCallback(async (startIndex: number, append: boolean) => {
+    if (!id?.trim() || fetchingRef.current) return;
+    fetchingRef.current = true;
+
+    try {
+      const result = await fetchLibraryItems({
+        id,
+        collectionType: collectionTypeRef.current,
+        limit: PAGE_SIZE,
+        startIndex,
+        sortBy: sortBy as ItemSortBy,
+        sortOrder: sortOrder as SortOrder,
+        searchTerm: searchQuery || undefined,
+      });
+
+      if (append) {
+        setItems(prev => [...prev, ...result.items]);
+      } else {
+        setItems(result.items);
+      }
+
+      setTotalCount(result.totalRecordCount);
+      setHasMore(startIndex + PAGE_SIZE < result.totalRecordCount);
+    } catch (err: any) {
+      console.error(err);
+      handleAuthError(err);
+    } finally {
+      fetchingRef.current = false;
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, [id, sortBy, sortOrder, searchQuery, refreshKey, handleAuthError]);
+
+  // Initial load and when sort/search changes
   useEffect(() => {
-    async function fetchAdminStatus() {
+    if (!id?.trim()) return;
+
+    const init = async () => {
+      setLoading(true);
+      try {
+        const [authData, details] = await Promise.all([
+          getAuthData(),
+          getLibraryById(id),
+        ]);
+
+        if (!details) return;
+
+        setServerUrl(authData.serverUrl);
+        setLibraryName(details.Name || "Library");
+        collectionTypeRef.current = details.CollectionType;
+      } catch (err: any) {
+        console.error(err);
+        handleAuthError(err);
+        setLoading(false);
+        return;
+      }
+
+      await fetchPage(0, false);
+    };
+
+    init();
+  }, [id, fetchPage]);
+
+  // Fetch admin status
+  useEffect(() => {
+    const fetchAdminStatus = async () => {
       try {
         const currentUser = await getUser();
         if (currentUser?.Id) {
@@ -36,67 +110,39 @@ export default function LibraryPage() {
           }
         }
       } catch {
-        // Non-admin or fetch failed — leave isAdmin as false
+        // Non-admin or fetch failed
       }
-    }
-
+    };
     fetchAdminStatus();
   }, []);
 
-  useEffect(() => {
-    async function fetchLibraryData() {
-      if (!id?.trim()) return;
+  const handleLoadMore = useCallback(() => {
+    if (!hasMore || loadingMore || fetchingRef.current) return;
+    setLoadingMore(true);
+    fetchPage(items.length, true);
+  }, [hasMore, loadingMore, items.length, fetchPage]);
 
-      try {
-        // Get auth info
-        const authData = await getAuthData();
-        setServerUrl(authData.serverUrl);
+  const handleSortChange = useCallback((newSortBy: string, newSortOrder: string) => {
+    setSortBy(newSortBy);
+    setSortOrder(newSortOrder);
+  }, []);
 
-        // Fetch both library details and initial items in parallel
-        const [details, initialItems] = await Promise.all([
-          getLibraryById(id),
-          fetchLibraryItems({ id }), // first fetch to get totalRecordCount
-        ]);
+  const handleSearchChange = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
 
-        if (!details || !initialItems) {
-          return;
-        }
-
-        setLibraryDetails(details);
-
-        // Fetch all items using totalRecordCount
-        const allItems = await fetchLibraryItems(
-          { id, collectionType: details.CollectionType },
-          initialItems.totalRecordCount,
-        );
-        setLibraryItems(allItems.items);
-
-        setLibraryName(details.Name || "Library");
-      } catch (err: any) {
-        console.error(err);
-        if (handleAuthError(err)) return;
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchLibraryData();
-  }, [id]);
+  const handleRefresh = useCallback(() => {
+    setRefreshKey(k => k + 1);
+  }, []);
 
   if (loading) return <LoadingSpinner />;
 
-  if (
-    libraryDetails == null ||
-    id == null ||
-    libraryItems == null ||
-    serverUrl == null
-  )
+  if (!serverUrl || !id)
     return <ErrorWindow message="Error loading Library. Please try again." />;
 
   return (
     <div className="relative px-4 py-3 max-w-full overflow-hidden">
       <AuroraBackground />
-      {/* Main content with higher z-index */}
       <div className="relative z-10">
         <div className="relative z-99 mb-8">
           <div className="mb-6">
@@ -111,10 +157,22 @@ export default function LibraryPage() {
             <ScanLibraryButton libraryId={id} isAdmin={isAdmin} />
           </div>
           <span className="font-mono text-muted-foreground">
-            {libraryItems.length} items
+            {totalCount} items
           </span>
         </div>
-        <LibraryMediaList mediaItems={libraryItems} serverUrl={serverUrl} />
+        <LibraryMediaList
+          mediaItems={items}
+          serverUrl={serverUrl}
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+          onLoadMore={handleLoadMore}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onSortChange={handleSortChange}
+          searchQuery={searchQuery}
+          onSearchChange={handleSearchChange}
+          onRefresh={handleRefresh}
+        />
       </div>
     </div>
   );
