@@ -2,9 +2,9 @@ services:
   aperture:
     image: akhilmulpuri/aperture-web:latest
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
-      - DEFAULT_SERVER_URL=${DEFAULT_SERVER_URL}
+      - DEFAULT_SERVER_URL=http://127.0.0.1:3001
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000"]

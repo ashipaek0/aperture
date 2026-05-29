@@ -20,20 +20,20 @@ interface ProbeMediaDialogProps {
   className?: string;
 }
 
-function formatBytes(bytes?: number): string {
+function formatBytes(bytes?: number | null): string {
   if (!bytes) return "—";
   const gb = bytes / 1_073_741_824;
   return gb >= 1 ? `${gb.toFixed(2)} GB` : `${(bytes / 1_048_576).toFixed(1)} MB`;
 }
 
-function formatBitrate(bps?: number): string {
+function formatBitrate(bps?: number | null): string {
   if (!bps) return "—";
   return bps >= 1_000_000
     ? `${(bps / 1_000_000).toFixed(2)} Mbps`
     : `${Math.round(bps / 1000)} kbps`;
 }
 
-function formatDuration(ticks?: number): string {
+function formatDuration(ticks?: number | null): string {
   if (!ticks) return "—";
   const totalSeconds = Math.floor(ticks / 10_000_000);
   const h = Math.floor(totalSeconds / 3600);
