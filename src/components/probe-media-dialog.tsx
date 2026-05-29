@@ -18,6 +18,7 @@ import { Cpu } from "lucide-react";
 interface ProbeMediaDialogProps {
   itemId: string;
   className?: string;
+  onResult?: (sources: MediaSourceInfo[]) => void;
 }
 
 function formatBytes(bytes?: number | null): string {
@@ -240,7 +241,7 @@ function ProbeResults({ sources }: { sources: MediaSourceInfo[] }) {
   );
 }
 
-export function ProbeMediaDialog({ itemId, className }: ProbeMediaDialogProps) {
+export function ProbeMediaDialog({ itemId, className, onResult }: ProbeMediaDialogProps) {
   const [sources, setSources] = useState<MediaSourceInfo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -253,6 +254,7 @@ export function ProbeMediaDialog({ itemId, className }: ProbeMediaDialogProps) {
     try {
       const result = await probeMedia(itemId);
       setSources(result);
+      onResult?.(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {

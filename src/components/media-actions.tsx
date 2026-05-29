@@ -58,10 +58,15 @@ export function MediaActions({
   const isMobile = useIsMobile();
   const [selectedVersion, setSelectedVersion] =
     useState<MediaSourceInfo | null>(null);
+  const [probedSources, setProbedSources] = useState<MediaSourceInfo[] | null>(null);
   const [selectedAudioStreamIndex, setSelectedAudioStreamIndex] = useState<
     number | undefined
   >(undefined);
   const [userPolicy, setUserPolicy] = useState<UserPolicy | null>(null);
+
+  // Use probed sources if available, otherwise fall back to the item's built-in sources.
+  // Probed sources have full MediaStreams for .strm/remote files.
+  const effectiveSources = probedSources ?? media?.MediaSources ?? [];
 
   // Determine if this is a resume or new play
   const hasProgress =
@@ -75,8 +80,8 @@ export function MediaActions({
 
   // Initialize selectedVersion and Audio Stream when media changes
   useEffect(() => {
-    if (media?.MediaSources && media.MediaSources.length > 0) {
-      const defaultSource = media.MediaSources[0];
+    if (effectiveSources.length > 0) {
+      const defaultSource = effectiveSources[0];
       setSelectedVersion(defaultSource);
 
       // Select default audio stream
@@ -160,7 +165,7 @@ export function MediaActions({
   }
 
   // If episode doesn't have MediaSources but has an Id, show basic play button
-  if (!media.MediaSources || media.MediaSources.length === 0) {
+  if (effectiveSources.length === 0) {
     if (episode && media.Id) {
       return (
         <div className="mb-4 flex items-center">
@@ -188,7 +193,7 @@ export function MediaActions({
     return null;
   }
 
-  const hasMultipleVersions = media.MediaSources.length > 1;
+  const hasMultipleVersions = effectiveSources.length > 1;
 
   const download = async () => {
     window.open(await getDownloadUrl(selectedVersion.Id!), "_blank");
@@ -414,7 +419,7 @@ export function MediaActions({
                 align={isMobile ? "center" : "start"}
                 className={isMobile ? "w-[calc(100vw-2rem)]" : "min-w-56"}
               >
-                {media.MediaSources.map((source: MediaSourceInfo) => (
+                {effectiveSources.map((source: MediaSourceInfo) => (
                   <DropdownMenuItem
                     key={source.Id}
                     onSelect={() => {
@@ -519,6 +524,10 @@ export function MediaActions({
           <ProbeMediaDialog
             itemId={media.Id!}
             className="flex-1 sm:flex-none sm:h-9 sm:w-9 sm:px-0 sm:gap-0"
+            onResult={(sources) => {
+              setProbedSources(sources);
+              setSelectedVersion(sources[0]);
+            }}
           />
 
           <Button
@@ -566,7 +575,7 @@ export function MediaActions({
           <div className="flex items-center gap-2">
             <Layers className="h-3 w-3 text-primary" />
             <span className="font-medium">
-              {media.MediaSources.length} versions available
+              {effectiveSources.length} versions available
             </span>
           </div>
         </div>
