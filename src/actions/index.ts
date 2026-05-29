@@ -62,6 +62,7 @@ export {
   getUserLibraries,
   getLibraryById,
   getLiveTVStreamUrl,
+  probeMedia,
   fetchRemoteImages,
   downloadRemoteImage,
   fetchCurrentImages,

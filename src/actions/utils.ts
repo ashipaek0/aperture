@@ -190,6 +190,32 @@ export async function getLiveTVStreamUrl(
   }
 }
 
+export async function probeMedia(itemId: string): Promise<MediaSourceInfo[]> {
+  const { serverUrl, user } = await getAuthData();
+  const url = `${serverUrl}/Items/${itemId}/PlaybackInfo`;
+
+  const { data } = await axios.post(url, {
+    UserId: user.Id,
+    IsPlayback: false,
+    AutoOpenLiveStream: true,
+    StartTimeTicks: 0,
+  }, {
+    params: {
+      userId: user.Id,
+      api_key: user.AccessToken,
+    },
+    headers: {
+      Authorization: `MediaBrowser Token="${user.AccessToken}"`,
+    },
+  });
+
+  if (!data.MediaSources || data.MediaSources.length === 0) {
+    throw new Error("No media sources returned. The item may be unavailable or unreachable.");
+  }
+
+  return data.MediaSources as MediaSourceInfo[];
+}
+
 export async function getUserImageUrl(itemId: string): Promise<string> {
   const { serverUrl } = await getAuthData();
 
