@@ -138,65 +138,13 @@ function parseSubtitleHTML(text: string): React.ReactNode {
   return elements;
 }
 
-/**
- * Parse VTT format subtitle content
- */
-function parseVTT(content: string): SubtitleLine[] {
-  const lines = content.split("\n");
-  const subtitles: SubtitleLine[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-
-    // Look for timestamp line (format: HH:MM:SS.mmm --> HH:MM:SS.mmm)
-    if (line.includes("-->")) {
-      const [startStr, endStr] = line.split("-->").map((s) => s.trim());
-      const startTime = timeToSeconds(startStr);
-      const endTime = timeToSeconds(endStr);
-
-      // Collect all text lines until next empty line
-      let textLines: string[] = [];
-      i++;
-      while (i < lines.length && lines[i].trim() !== "") {
-        textLines.push(lines[i]);
-        i++;
-      }
-
-      if (textLines.length > 0) {
-        subtitles.push({
-          startTime,
-          endTime,
-          text: textLines.join("\n"),
-        });
-      }
-    }
-  }
-
-  return subtitles;
-}
-
-/**
- * Convert timestamp string (HH:MM:SS.mmm) to seconds
- */
-function timeToSeconds(timeStr: string): number {
-  const parts = timeStr.split(":");
-  const hours = parseInt(parts[0], 10) || 0;
-  const minutes = parseInt(parts[1], 10) || 0;
-  const seconds = parseFloat(parts[2]) || 0;
-
-  return hours * 3600 + minutes * 60 + seconds;
-}
-
 export const SubtitleDisplay: React.FC<SubtitleDisplayProps> = ({
   currentTime,
   subtitleStreamIndex,
-  textTracks = [],
+  textTracks: _textTracks, // Keep prop for compatibility, but we use TextTrack API
   isVisible = true,
   isControlsVisible = true,
 }) => {
-  const [allSubtitles, setAllSubtitles] = useState<Map<number, SubtitleLine[]>>(
-    new Map(),
-  );
   const [currentSubtitle, setCurrentSubtitle] = useState<SubtitleLine | null>(
     null,
   );
@@ -242,61 +190,65 @@ export const SubtitleDisplay: React.FC<SubtitleDisplayProps> = ({
     };
   }, []);
 
-  // Fetch and parse all subtitle files
+  // Read subtitle cues from the video element's native TextTrack API.
+  // HLS.js adds <track> elements and pushes VTTCue objects into them.
+  // We listen for cuechange instead of polling currentTime.
   useEffect(() => {
-    if (!textTracks || textTracks.length === 0) {
-      setAllSubtitles(new Map());
-      setCurrentSubtitle(null);
-      return;
-    }
+    const video = document.getElementById(
+      "aperture-video-player",
+    ) as HTMLVideoElement | null;
+    if (!video) return;
 
-    const loadAllSubtitles = async () => {
-      const subtitleMap = new Map<number, SubtitleLine[]>();
-
-      for (const track of textTracks) {
-        try {
-          const response = await fetch(track.src);
-          if (!response.ok) {
-            console.error(
-              `Failed to fetch subtitles for ${track.label}:`,
-              response.statusText,
-            );
-            continue;
-          }
-
-          const content = await response.text();
-          const parsed = parseVTT(content);
-          subtitleMap.set(track.index, parsed);
-        } catch (error) {
-          console.error(`Error loading subtitles for ${track.label}:`, error);
+    const findActiveCue = () => {
+      for (let i = 0; i < video.textTracks.length; i++) {
+        const track = video.textTracks[i];
+        if (
+          track.mode !== "disabled" &&
+          track.activeCues &&
+          track.activeCues.length > 0
+        ) {
+          const cue = track.activeCues[0] as VTTCue;
+          setCurrentSubtitle({
+            startTime: cue.startTime,
+            endTime: cue.endTime,
+            text: cue.text,
+          });
+          return;
         }
       }
-
-      setAllSubtitles(subtitleMap);
+      setCurrentSubtitle(null);
     };
 
-    loadAllSubtitles();
-  }, [textTracks]);
+    const handleCueChange = () => findActiveCue();
 
-  // Update current subtitle based on selected track and playback time
-  useEffect(() => {
-    if (subtitleStreamIndex === undefined || subtitleStreamIndex === -1) {
-      setCurrentSubtitle(null);
-      return;
-    }
+    // Attach cuechange listeners to existing tracks
+    const attachToTracks = () => {
+      for (let i = 0; i < video.textTracks.length; i++) {
+        video.textTracks[i].addEventListener("cuechange", handleCueChange);
+      }
+    };
 
-    const subtitles = allSubtitles.get(subtitleStreamIndex);
-    if (!subtitles || subtitles.length === 0) {
-      setCurrentSubtitle(null);
-      return;
-    }
+    // Listen for tracks added later (HLS.js adds them asynchronously)
+    const handleAddTrack = () => {
+      const added = video.textTracks[video.textTracks.length - 1];
+      if (added) {
+        added.addEventListener("cuechange", handleCueChange);
+      }
+      // Do an initial cue check after a track is added
+      findActiveCue();
+    };
 
-    const active = subtitles.find(
-      (sub) => currentTime >= sub.startTime && currentTime < sub.endTime,
-    );
+    video.textTracks.addEventListener("addtrack", handleAddTrack);
+    attachToTracks();
+    findActiveCue();
 
-    setCurrentSubtitle(active || null);
-  }, [currentTime, subtitleStreamIndex, allSubtitles]);
+    return () => {
+      video.textTracks.removeEventListener("addtrack", handleAddTrack);
+      for (let i = 0; i < video.textTracks.length; i++) {
+        video.textTracks[i].removeEventListener("cuechange", handleCueChange);
+      }
+    };
+  }, [subtitleStreamIndex]);
 
   if (!isVisible || !currentSubtitle) {
     return null;

@@ -366,6 +366,7 @@ export const HTMLVideoPlayer = forwardRef<Player, HTMLVideoPlayerProps>(
     return (
       <video
         ref={videoRef}
+        id="aperture-video-player"
         className={`w-full h-full bg-black ${className}`}
         crossOrigin="anonymous"
         playsInline
