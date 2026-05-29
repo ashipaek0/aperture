@@ -209,7 +209,32 @@ export function usePlaybackManager(): PlaybackContextValue {
 
       try {
         if (mediaSource?.Id && itemToPlay!.Id) {
-          const subs = await getSubtitleTracks(itemToPlay!.Id!, mediaSource.Id);
+          let subs = await getSubtitleTracks(itemToPlay!.Id!, mediaSource.Id);
+
+          // Fallback: for virtual URL streams, the server may not have
+          // subtitle data. Derive from the in-memory MediaStreams instead.
+          if (subs.length === 0 && mediaSource?.MediaStreams) {
+            subs = mediaSource.MediaStreams
+              .filter(
+                (s) =>
+                  s.Type === "Subtitle" &&
+                  (s.Codec || "").toLowerCase() !== "pgssub",
+              )
+              .map((stream) => ({
+                kind: "subtitles",
+                label:
+                  stream.DisplayTitle ||
+                  stream.Language ||
+                  `Track ${stream.Index}`,
+                language: stream.Language || "unknown",
+                src: `/api/subtitles/Videos/${itemToPlay!.Id}/${mediaSource.Id}/Subtitles/${stream.Index}/Stream.vtt`,
+                default: stream.IsDefault || false,
+                forced: stream.IsForced || false,
+                index: stream.Index ?? -1,
+              }));
+            updateState({ textTracks: subs });
+          }
+
           let targetIndex = options.subtitleStreamIndex;
 
           if (targetIndex === undefined && options.subtitleLanguage) {

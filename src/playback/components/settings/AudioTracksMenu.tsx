@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useMemo } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,7 +9,6 @@ import {
 } from "../../../components/ui/dropdown-menu";
 import { Music2 } from "lucide-react";
 import { PlaybackContextValue } from "../../hooks/usePlaybackManager";
-import { getAudioTracks } from "../../../actions";
 import { SettingsMenuButton } from "./SettingsMenuButton";
 
 interface AudioTracksMenuProps {
@@ -24,25 +23,32 @@ export const AudioTracksMenu: React.FC<AudioTracksMenuProps> = ({
   onOpenChange,
 }) => {
   const { playbackState } = manager;
-  const { currentItem, currentMediaSource } = playbackState;
-  const [audioTracks, setAudioTracks] = useState<any[]>([]);
+  const { currentMediaSource } = playbackState;
 
-  useEffect(() => {
-    async function fetchTracks() {
-      if (currentItem?.Id && currentMediaSource?.Id) {
-        try {
-          const audio = await getAudioTracks(
-            currentItem.Id,
-            currentMediaSource.Id,
-          );
-          setAudioTracks(audio);
-        } catch (error) {
-          console.error("Failed to fetch audio tracks", error);
-        }
-      }
-    }
-    fetchTracks();
-  }, [currentItem?.Id, currentMediaSource?.Id]);
+  const audioTracks = useMemo(() => {
+    const streams =
+      currentMediaSource?.MediaStreams?.filter((s) => s.Type === "Audio") ?? [];
+
+    const tracks = streams.map((stream) => ({
+      id: stream.Index,
+      label:
+        stream.DisplayTitle ||
+        stream.Language ||
+        `${stream.Codec || "Audio"} Track ${stream.Index}`,
+      language: stream.Language || "unknown",
+      codec: stream.Codec,
+      channels: stream.Channels,
+      default: stream.IsDefault || false,
+    }));
+
+    tracks.sort((a, b) => {
+      if (a.default && !b.default) return -1;
+      if (!a.default && b.default) return 1;
+      return (a.language || "").localeCompare(b.language || "");
+    });
+
+    return tracks;
+  }, [currentMediaSource]);
 
   const handleAudioChange = (indexStr: string) => {
     const index = parseInt(indexStr);

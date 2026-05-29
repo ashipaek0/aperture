@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useMemo } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,7 +10,6 @@ import {
 } from "../../../components/ui/dropdown-menu";
 import { Captions, Type } from "lucide-react";
 import { PlaybackContextValue } from "../../hooks/usePlaybackManager";
-import { getSubtitleTracks } from "../../../actions";
 import { SettingsMenuButton } from "./SettingsMenuButton";
 
 interface SubtitleTracksMenuProps {
@@ -26,9 +25,8 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
 }) => {
   const { playbackState } = manager;
   const { currentItem, currentMediaSource } = playbackState;
-  const [subtitleTracks, setSubtitleTracks] = useState<any[]>([]);
 
-  const [subtitleSize, setSubtitleSize] = useState<number>(() => {
+  const [subtitleSize, setSubtitleSize] = React.useState<number>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("aperture-subtitle-size");
       return saved ? parseInt(saved, 10) : 100;
@@ -36,22 +34,30 @@ export const SubtitleTracksMenu: React.FC<SubtitleTracksMenuProps> = ({
     return 100;
   });
 
-  useEffect(() => {
-    async function fetchTracks() {
-      if (currentItem?.Id && currentMediaSource?.Id) {
-        try {
-          const subs = await getSubtitleTracks(
-            currentItem.Id,
-            currentMediaSource.Id,
-          );
-          setSubtitleTracks(subs);
-        } catch (error) {
-          console.error("Failed to fetch subtitle tracks", error);
-        }
-      }
-    }
-    fetchTracks();
-  }, [currentItem?.Id, currentMediaSource?.Id]);
+  const subtitleTracks = useMemo(() => {
+    const streams =
+      currentMediaSource?.MediaStreams?.filter(
+        (s) =>
+          s.Type === "Subtitle" &&
+          (s.Codec || "").toLowerCase() !== "pgssub",
+      ) ?? [];
+
+    return streams.map((stream) => {
+      const src = currentItem?.Id && currentMediaSource?.Id
+        ? `/api/subtitles/Videos/${currentItem.Id}/${currentMediaSource.Id}/Subtitles/${stream.Index}/Stream.vtt`
+        : "";
+      return {
+        kind: "subtitles",
+        label:
+          stream.DisplayTitle || stream.Language || `Track ${stream.Index}`,
+        language: stream.Language || "unknown",
+        src,
+        default: stream.IsDefault || false,
+        forced: stream.IsForced || false,
+        index: stream.Index ?? -1,
+      };
+    });
+  }, [currentMediaSource, currentItem]);
 
   const handleSubtitleSizeChange = (newSize: number) => {
     setSubtitleSize(newSize);
